@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>YoursPan主页</title>
+</head>
+<body>
+    <h1>欢迎来到YoursPan主页</h1>
+    <h2>YoursPan是一个开源的网盘系统</h2>
+    <form action="/sms/system/login" method="post">
+        <label>
+            <input type="text" name="uid" placeholder="UID">
+        </label>
+        <br>
+        <label>
+            <input type="password" name="password" placeholder="密码">
+        </label>
+        <br>
+        <label>
+            <input type="text" name="code" placeholder="验证码">
+        </label>
+        <br>
+        <label>
+            <img src="/sms/system/getVerifyCodeImage" alt="验证码" onclick="this.src='/sms/system/getVerifyCodeImage?'+Math.random()">
+        </label>
+        <br>
+        <input type="submit" value="登录">
+    </form>
+</body>
+</html>
