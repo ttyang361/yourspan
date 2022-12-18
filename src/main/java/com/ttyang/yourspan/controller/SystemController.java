@@ -9,13 +9,13 @@ import com.ttyang.yourspan.pojo.LoginForm;
 import com.ttyang.yourspan.pojo.RegisterForm;
 import com.ttyang.yourspan.pojo.User;
 import com.ttyang.yourspan.service.UserService;
-import com.ttyang.yourspan.service.impl.UserServiceImpl;
 import com.ttyang.yourspan.util.MyJwtTool;
 import com.ttyang.yourspan.util.Result;
 import com.ttyang.yourspan.util.ResultEnum;
 import io.swagger.annotations.Api;
 import io.swagger.annotations.ApiOperation;
 import io.swagger.annotations.ApiParam;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.*;
 
 import javax.servlet.http.HttpServletRequest;
@@ -33,7 +33,8 @@ import java.util.Map;
 @RestController
 @RequestMapping("/sms/system")
 public class SystemController {
-    private final UserService userService = new UserServiceImpl();
+    @Autowired
+    private UserService userService;
 
     @ApiOperation("向服务端发送请求获取验证码图片接口")
     @GetMapping("/getVerifyCodeImage")
@@ -59,9 +60,7 @@ public class SystemController {
         // 验证码校验
         // 1.分别从session和表单中取出验证码
         String sessionVerifyCode = (String) request.getSession().getAttribute("verifyCode");
-        // System.out.println("session:"+sessionVerifyCode);
         String loginVerifyCode = loginForm.getVerifyCode();
-        // System.out.println("form: code: "+loginVerifyCode+"uid: "+loginForm.getUserId()+"pwd: "+loginForm.getPassword());
         // 2.判断验证码是否失效
         if ("".equals(sessionVerifyCode) || null == sessionVerifyCode) {
             return Result.fail().message("验证码失效，请重试！");
@@ -79,9 +78,9 @@ public class SystemController {
             if (null != user) {
                 map.put("token", MyJwtTool.createTokenByUid(user.getUid()));
             } else {
-                throw new RuntimeException("找不到该用户！");
+                throw new RuntimeException("用户名或密码错误！");
             }
-            return Result.ok(map);
+            return Result.ok(map).message("登录成功！");
         } catch (RuntimeException e) {
             e.printStackTrace();
             return Result.fail().message(e.getMessage());
@@ -91,8 +90,8 @@ public class SystemController {
     @ApiOperation("通过token获取用户信息接口")
     @GetMapping("/getUserInfoByToken")
     public Result<?> getUserInfoByToken(@ApiParam("token") @RequestHeader("token") String token) {
-        // 判断token是否过期
-        if (!MyJwtTool.isValidToken(token)) {
+        // 判断token是否过期，这里MyJwtTool.isValidToken(token)后续需要注意修改
+        if (MyJwtTool.isValidToken(token)) {
             return Result.build(null, ResultEnum.TOKEN_ERROR);
         }
         // 从token中获取uid

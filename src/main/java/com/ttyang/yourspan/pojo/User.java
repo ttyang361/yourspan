@@ -32,5 +32,6 @@ public class User {
     /**
      *
      */
+    @TableField(value = "avatar_path")
     private String avatarPath;
 }

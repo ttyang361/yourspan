@@ -5,13 +5,13 @@ import cn.hutool.crypto.digest.DigestUtil;
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.ttyang.yourspan.pojo.User;
 import com.ttyang.yourspan.service.UserService;
-import com.ttyang.yourspan.service.impl.UserServiceImpl;
 import com.ttyang.yourspan.util.MyJwtTool;
 import com.ttyang.yourspan.util.Result;
 import com.ttyang.yourspan.util.ResultEnum;
 import io.swagger.annotations.Api;
 import io.swagger.annotations.ApiOperation;
 import io.swagger.annotations.ApiParam;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
@@ -27,8 +27,10 @@ import java.util.Objects;
 @Api(tags = "用户控制器")
 @RestController
 @RequestMapping("/sms/userController")
+@CrossOrigin
 public class UserController {
-    private final UserService userService = new UserServiceImpl();
+    @Autowired
+    private UserService userService;
 
     @ApiOperation("修改密码接口")
     @PostMapping("/resetPwd/{oldPwd}/{newPwd}")

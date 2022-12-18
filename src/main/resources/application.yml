@@ -19,7 +19,7 @@ spring:
       minimum-idle: 10
       pool-name: GuliHikariPool
   thymeleaf:
-    mode: HTML5
+    mode: HTML
     encoding: UTF-8
     cache: false
     prefix: classpath:/static/
