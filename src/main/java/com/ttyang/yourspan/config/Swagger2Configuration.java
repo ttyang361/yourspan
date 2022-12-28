@@ -50,7 +50,7 @@ public class Swagger2Configuration {
                 .title("YoursPan-API文档")
                 .description("Controller层各接口定义")
                 .version("1.0")
-                .contact(new Contact("ttyang", "https://github.com/ttyang361/yoursname.git", "3615796004@qq.com"))
+                .contact(new Contact("ttyang", "https://github.com/ttyang361/yourspan.git", "3615796004@qq.com"))
                 .build();
     }
 }

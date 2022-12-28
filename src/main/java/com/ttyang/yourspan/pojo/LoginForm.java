@@ -9,7 +9,16 @@ import lombok.Data;
  */
 @Data
 public class LoginForm {
+    /**
+     * 登录表单项——用户id
+     */
     private String userId;
+    /**
+     * 登录表单项——密码
+     */
     private String password;
+    /**
+     * 登录表单项——验证码
+     */
     private String verifyCode;
 }

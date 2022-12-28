@@ -21,14 +21,14 @@ public enum ResultEnum {
      * EMAIL_ERROR      用于注册的邮箱已被注册
      * EMAIL_NOT_VALID  用于找回密码的邮箱不合法(未注册)
      */
-    SUCCESS(200,"成功"),
-    FAIL(201,"失败"),
-    CODE_ERROR(203,"验证码错误"),
-    LOGIN_ERROR(204,"用户名或密码错误"),
-    TOKEN_ERROR(205,"token失效"),
-    TIME_OUT(206,"会话已过期，请重新登陆"),
-    EMAIL_NOT_VALID(207,"该邮箱未注册"),
-    EMAIL_ERROR(207,"该邮箱已被注册");
+    SUCCESS(200, "成功"),
+    FAIL(201, "失败"),
+    CODE_ERROR(203, "验证码错误"),
+    LOGIN_ERROR(204, "用户名或密码错误"),
+    TOKEN_ERROR(205, "token失效"),
+    TIME_OUT(206, "会话已过期，请重新登陆"),
+    EMAIL_NOT_VALID(207, "该邮箱未注册"),
+    EMAIL_ERROR(207, "该邮箱已被注册");
     private final Integer code;
     private final String message;
 }

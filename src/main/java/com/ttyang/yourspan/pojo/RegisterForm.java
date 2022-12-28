@@ -9,7 +9,12 @@ import lombok.Data;
  */
 @Data
 public class RegisterForm {
+    /**
+     * 注册表单项——邮箱
+     */
     private String email;
+    /**
+     * 注册表单项——密码
+     */
     private String password;
-    private Integer eVerifyCode;
 }

@@ -14,6 +14,7 @@ import com.ttyang.yourspan.pojo.User;
 public interface UserService extends IService<User> {
     /**
      * 用户登录服务
+     *
      * @param loginForm 登录表单
      * @return 用户实体类
      */
@@ -21,6 +22,7 @@ public interface UserService extends IService<User> {
 
     /**
      * 通过uid获取对应的User实体类服务
+     *
      * @param uid 用户uid
      * @return 该uid对应用户实体类
      */
@@ -29,6 +31,7 @@ public interface UserService extends IService<User> {
 
     /**
      * 检查邮箱是否合法(在user表中的email列中是否存在)服务
+     *
      * @param email 邮箱
      * @return 如果不存在返回true，否则false
      */
@@ -37,6 +40,7 @@ public interface UserService extends IService<User> {
 
     /**
      * 用户注册服务
+     *
      * @param registerForm 注册表单
      * @return 返回注册成功用户实体类
      */
@@ -45,6 +49,7 @@ public interface UserService extends IService<User> {
 
     /**
      * 忘记密码服务
+     *
      * @param forgetForm 忘记密码表单
      * @return 返回重置密码成功用户实体类
      */

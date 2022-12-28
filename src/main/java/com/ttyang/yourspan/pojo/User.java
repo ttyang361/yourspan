@@ -18,11 +18,26 @@ import lombok.NoArgsConstructor;
 @AllArgsConstructor
 @TableName("user")
 public class User {
-    @TableId(value = "uid",type = IdType.AUTO)
+    /**
+     * 用户id
+     */
+    @TableId(value = "uid", type = IdType.AUTO)
     private Integer uid;
+    /**
+     * 用户密码
+     */
     private String password;
+    /**
+     * 用户邮箱
+     */
     private String email;
+    /**
+     * 用户昵称
+     */
     private String name;
+    /**
+     * 用户手机号
+     */
     private String telephone;
     /**
      * 用户所属云盘根目录
@@ -30,7 +45,7 @@ public class User {
     @TableField(value = "root_fdir_path")
     private String rootFdirPath;
     /**
-     *
+     * 用户头像文件路径
      */
     @TableField(value = "avatar_path")
     private String avatarPath;

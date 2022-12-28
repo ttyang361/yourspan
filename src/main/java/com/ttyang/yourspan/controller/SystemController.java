@@ -4,10 +4,8 @@ import cn.hutool.captcha.CaptchaUtil;
 import cn.hutool.captcha.LineCaptcha;
 import cn.hutool.core.util.RandomUtil;
 import cn.hutool.extra.mail.MailUtil;
-import com.ttyang.yourspan.pojo.ForgetForm;
-import com.ttyang.yourspan.pojo.LoginForm;
-import com.ttyang.yourspan.pojo.RegisterForm;
-import com.ttyang.yourspan.pojo.User;
+import com.ttyang.yourspan.pojo.*;
+import com.ttyang.yourspan.service.MenuService;
 import com.ttyang.yourspan.service.UserService;
 import com.ttyang.yourspan.util.MyJwtTool;
 import com.ttyang.yourspan.util.Result;
@@ -21,8 +19,7 @@ import org.springframework.web.bind.annotation.*;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
 import java.io.IOException;
-import java.util.LinkedHashMap;
-import java.util.Map;
+import java.util.*;
 
 /**
  * @author ttyang
@@ -33,8 +30,11 @@ import java.util.Map;
 @RestController
 @RequestMapping("/sms/system")
 public class SystemController {
+
     @Autowired
     private UserService userService;
+    @Autowired
+    private MenuService menuService;
 
     @ApiOperation("向服务端发送请求获取验证码图片接口")
     @GetMapping("/getVerifyCodeImage")
@@ -87,6 +87,12 @@ public class SystemController {
         }
     }
 
+    @ApiOperation("注销登录接口")
+    @PostMapping("/logout")
+    public Result<?> logout() {
+        return Result.ok().message("注销登录成功！");
+    }
+
     @ApiOperation("通过token获取用户信息接口")
     @GetMapping("/getUserInfoByToken")
     public Result<?> getUserInfoByToken(@ApiParam("token") @RequestHeader("token") String token) {
@@ -101,17 +107,18 @@ public class SystemController {
         User user = userService.getUserByUid(uid);
         map.put("user", user);
         return Result.ok(map);
+
     }
 
     @ApiOperation("注册接口")
-    @PostMapping("/register")
-    public Result<?> register(@ApiParam("注册页提交信息的form表单") @RequestBody RegisterForm registerForm, HttpServletRequest request) {
+    @PostMapping("/register/{verifyCode}")
+    public Result<?> register(@ApiParam("注册页提交信息的form表单") @RequestBody RegisterForm registerForm, @PathVariable("verifyCode") String verifyCode, HttpServletRequest request) {
         // 检查该邮箱是否已注册，若已注册则返回”该邮箱已被注册“信息
         if (!userService.checkEmail(registerForm.getEmail())) {
             return Result.build(null, ResultEnum.EMAIL_ERROR);
         }
-        // 分别取出表单中的验证码和session中的验证码
-        Integer registerVerifyCode = registerForm.getEVerifyCode();
+        // 分别取出路径中的验证码和session中的验证码
+        Integer registerVerifyCode = Integer.parseInt(verifyCode);
         Integer sessionVerifyCode = (Integer) request.getSession().getAttribute("eVerifyCode");
         // 若验证码失效
         if (null == sessionVerifyCode || 0 == sessionVerifyCode) {
@@ -140,13 +147,13 @@ public class SystemController {
     }
 
     @ApiOperation("忘记密码接口")
-    @PostMapping("/forgetPwd")
-    public Result<?> forgetPwd(@ApiParam("忘记密码页提交信息的form表单") @RequestBody ForgetForm forgetForm, HttpServletRequest request) {
+    @PostMapping("/forgetPwd/{verifyCode}")
+    public Result<?> forgetPwd(@ApiParam("忘记密码页提交信息的form表单") @RequestBody ForgetForm forgetForm, @PathVariable("verifyCode") String verifyCode, HttpServletRequest request) {
         // 检查该邮箱是否已注册，若未注册则返回”该邮箱未注册“信息
         if (userService.checkEmail(forgetForm.getEmail())) {
             return Result.build(null, ResultEnum.EMAIL_NOT_VALID);
         }
-        Integer forgetVerifyCode = forgetForm.getEVerifyCode();
+        Integer forgetVerifyCode = Integer.parseInt(verifyCode);
         Integer sessionVerifyCode = (Integer) request.getSession().getAttribute("eVerifyCode");
         if (null == sessionVerifyCode || 0 == sessionVerifyCode) {
             return Result.fail().message("验证码已过期，请重试！");
@@ -186,5 +193,36 @@ public class SystemController {
         // 将验证码存放入session域
         request.getSession().setAttribute("eVerifyCode", code);
         return Result.ok();
+    }
+
+    @ApiOperation("获取用户所有目录对象接口")
+    @GetMapping("/getAllMenusByToken")
+    public Result<?> getAllMenusByToken(@ApiParam("token") @RequestHeader("token") String token) {
+        // 判断token是否过期，这里MyJwtTool.isValidToken(token)后续需要注意修改
+        if (MyJwtTool.isValidToken(token)) {
+            return Result.build(null, ResultEnum.TOKEN_ERROR);
+        }
+        // 从数据库获取所有目录表数据并以List<Menu>形式返回
+        List<Menu> l1 = menuService.getAllMenus();
+        List<Menu> l2 = new ArrayList<>();
+        // 遍历目录List<Menu> l1，去除id为1的项，并将所有parentId为1的放入另一个List<Menu> l2中
+        for (Menu menu : l1) {
+            if (menu.getId() != 1) {
+                if (menu.getParentId() == 1) {
+                    menu.setChildren(new ArrayList<>());
+                    l2.add(menu);
+                }
+            }
+        }
+        // 再次遍历List，若parentId与l2中的id相等则将l2中对应的项的children设为该项
+        for (Menu menu : l1) {
+            for (Menu menu1 : l2) {
+                if (Objects.equals(menu.getParentId(), menu1.getId())) {
+                    menu1.getChildren().add(menu);
+                }
+            }
+        }
+        // 将l2放入ok(data)中
+        return Result.ok(l2);
     }
 }

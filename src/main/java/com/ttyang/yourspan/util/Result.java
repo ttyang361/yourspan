@@ -31,35 +31,35 @@ public class Result<T> {
         return result;
     }
 
-    public static <T> Result<T> build(T data, ResultEnum resultEnum){
+    public static <T> Result<T> build(T data, ResultEnum resultEnum) {
         Result<T> result = build(data);
         result.setCode(resultEnum.getCode());
         result.setMessage(resultEnum.getMessage());
         return result;
     }
 
-    public static <T> Result<T> ok(){
+    public static <T> Result<T> ok() {
         return ok(null);
     }
 
-    public static <T> Result<T> ok(T data){
-        return build(data,ResultEnum.SUCCESS);
+    public static <T> Result<T> ok(T data) {
+        return build(data, ResultEnum.SUCCESS);
     }
 
-    public static <T> Result<T> fail(){
+    public static <T> Result<T> fail() {
         return fail(null);
     }
 
     public static <T> Result<T> fail(T data) {
-        return build(data,ResultEnum.FAIL);
+        return build(data, ResultEnum.FAIL);
     }
 
-    public Result<T> message(String msg){
+    public Result<T> message(String msg) {
         this.setMessage(msg);
         return this;
     }
 
-    public Result<T> code(Integer code){
+    public Result<T> code(Integer code) {
         this.setCode(code);
         return this;
     }
