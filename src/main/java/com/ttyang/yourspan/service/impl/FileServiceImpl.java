@@ -8,6 +8,8 @@ import com.ttyang.yourspan.service.FileService;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.sql.Date;
+import java.time.LocalDate;
 import java.util.List;
 
 @Service("fileServiceImpl")
@@ -18,5 +20,44 @@ public class FileServiceImpl extends ServiceImpl<FileMapper, File> implements Fi
         QueryWrapper<File> queryWrapper = new QueryWrapper<>();
         queryWrapper.eq("f_owner_id", uid);
         return baseMapper.selectList(queryWrapper);
+    }
+
+    @Override
+    public boolean uploadFileInfo(String prefixName, Integer uid, String group, String path, String folderId, Date createTime, Date modifiedTime) {
+        return save(new File(null, prefixName, uid, group, path, Integer.valueOf(folderId), createTime, modifiedTime));
+    }
+
+    @Override
+    public File getFileByFid(String fileId) {
+        QueryWrapper<File> queryWrapper = new QueryWrapper<>();
+        queryWrapper.eq("f_id", Integer.valueOf(fileId));
+        return baseMapper.selectOne(queryWrapper);
+    }
+
+    @Override
+    public boolean modifyFileName(String fileId, String newFileName) {
+        File file = getFileByFid(fileId);
+        file.setFName(newFileName);
+        file.setFLastModifiedTime(Date.valueOf(LocalDate.now()));
+        return updateById(file);
+    }
+
+    @Override
+    public String deleteFileByFid(String fileId) {
+        File file = getFileByFid(fileId);
+        String fullPath = file.getFGroup()+"/"+file.getFPath();
+        int result = baseMapper.delete(new QueryWrapper<File>().eq("f_id",Integer.valueOf(fileId)));
+        if(result == 1){
+            return fullPath;
+        }
+        return null;
+    }
+
+    @Override
+    public boolean modifyFolderOfFile(String fileId, String targetFolderId) {
+        File file = getFileByFid(fileId);
+        file.setFVirtualFolder(Integer.valueOf(targetFolderId));
+        file.setFLastModifiedTime(Date.valueOf(LocalDate.now()));
+        return updateById(file);
     }
 }
