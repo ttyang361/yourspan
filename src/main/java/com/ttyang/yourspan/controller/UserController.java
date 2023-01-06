@@ -154,7 +154,7 @@ public class UserController {
             // 将文件上传至fastdfs存储器中
             StorePath storePath = fastFileStorageClient.uploadFile(Files.newInputStream(file.toPath()), file.length(), suffixName, null);
             // 将文件信息存入file表内
-            boolean result = fileService.uploadFileInfo(prefixName, uid, storePath.getGroup(), storePath.getPath(), folderId, Date.valueOf(LocalDate.now()), Date.valueOf(LocalDate.now()));
+            boolean result = fileService.uploadFileInfo(originalFileName, uid, storePath.getGroup(), storePath.getPath(), folderId, Date.valueOf(LocalDate.now()), Date.valueOf(LocalDate.now()));
             if (!result) {
                 throw new RuntimeException("上传文件信息失败！");
             }
@@ -181,6 +181,7 @@ public class UserController {
             return Result.build(null, ResultEnum.TOKEN_ERROR);
         }
         com.ttyang.yourspan.pojo.File file = fileService.getFileByFid(fileId);
+        response.setHeader("Content-Disposition", "attachment; filename=" + file.getFName());
         fastFileStorageClient.downloadFile(file.getFGroup(), file.getFPath(), ins -> {
             IOUtils.copy(ins, response.getOutputStream());
             return null;
@@ -200,6 +201,10 @@ public class UserController {
         if (MyJwtTool.isValidToken(token)) {
             return Result.build(null, ResultEnum.TOKEN_ERROR);
         }
+        // 处理folderName
+        int startIndex = newFileName.indexOf("\"fileName\":\"") + "\"fileName\":\"".length();
+        int endIndex = newFileName.indexOf("\"", startIndex);
+        newFileName = newFileName.substring(startIndex, endIndex);
         boolean result = fileService.modifyFileName(fileId, newFileName);
         if (!result) {
             throw new RuntimeException("修改文件名异常！");
@@ -262,6 +267,10 @@ public class UserController {
         if (MyJwtTool.isValidToken(token)) {
             return Result.build(null, ResultEnum.TOKEN_ERROR);
         }
+        // 处理targetFolderId
+        int startIndex = targetFolderId.indexOf(":") + 1;
+        int endIndex = targetFolderId.indexOf("}");
+        targetFolderId = targetFolderId.substring(startIndex, endIndex);
         boolean result = fileService.modifyFolderOfFile(fileId, targetFolderId);
         if (!result) {
             throw new RuntimeException("移动文件异常！");
@@ -281,6 +290,10 @@ public class UserController {
         if (MyJwtTool.isValidToken(token)) {
             return Result.build(null, ResultEnum.TOKEN_ERROR);
         }
+        // 处理folderName
+        int startIndex = folderName.indexOf("\"folderName\":\"") + "\"folderName\":\"".length();
+        int endIndex = folderName.indexOf("\"", startIndex);
+        folderName = folderName.substring(startIndex, endIndex);
         // 从token中获取到用户的uid
         Integer uid = MyJwtTool.getUidFromToken(token);
         boolean result = folderService.createNewFolder(folderName, parentFolderId, uid, Date.valueOf(LocalDate.now()), Date.valueOf(LocalDate.now()));
@@ -374,6 +387,10 @@ public class UserController {
         if (MyJwtTool.isValidToken(token)) {
             return Result.build(null, ResultEnum.TOKEN_ERROR);
         }
+        // 处理folderName
+        int startIndex = newFolderName.indexOf("\"folderName\":\"") + "\"folderName\":\"".length();
+        int endIndex = newFolderName.indexOf("\"", startIndex);
+        newFolderName = newFolderName.substring(startIndex, endIndex);
         boolean result = folderService.modifyFolderName(currentFolderId, newFolderName);
         if (!result) {
             throw new RuntimeException("修改文件夹名称异常！");
