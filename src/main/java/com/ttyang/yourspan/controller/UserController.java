@@ -21,6 +21,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
+import javax.servlet.ServletOutputStream;
 import javax.servlet.http.HttpServletResponse;
 import java.io.*;
 import java.nio.file.Files;
@@ -82,7 +83,7 @@ public class UserController {
     @PostMapping("/avatarUpload")
     public Result<?> avatarUpload(@ApiParam("头像文件") @RequestPart("multipartFile") MultipartFile multipartFile) {
         String headPath = "E:/MyIdeaProjects/yourspan/target/classes/public/upload/";
-        String fileName = IdUtil.simpleUUID().toLowerCase().concat(Objects.requireNonNull(multipartFile.getOriginalFilename()).substring(multipartFile.getOriginalFilename().lastIndexOf(".")));
+        String fileName = IdUtil.simpleUUID().toLowerCase().concat(Objects.requireNonNull(multipartFile.getOriginalFilename()));
         String avatarPath = headPath.concat(fileName);
         try {
             multipartFile.transferTo(new File(avatarPath));
@@ -90,6 +91,21 @@ public class UserController {
             e.printStackTrace();
         }
         return Result.ok("upload/".concat(fileName));
+    }
+
+    @ApiOperation(("修改用户头像路径接口"))
+    @PostMapping("/updateAvatarPath")
+    public Result<?> updateAvatarPath(@ApiParam("token") @RequestHeader("token") String token, @ApiParam("修改后的文件路径") @RequestBody String avatarPath) {
+        // 处理avatarPath
+        int startIndex = avatarPath.indexOf("\"avatarPath\":\"") + "\"avatarPath\":\"".length();
+        int endIndex = avatarPath.indexOf("\"", startIndex);
+        avatarPath = avatarPath.substring(startIndex, endIndex);
+
+        Integer uid = MyJwtTool.getUidFromToken(token);
+        User user = userService.getById(uid);
+        user.setAvatarPath(avatarPath);
+        userService.saveOrUpdate(user);
+        return Result.ok();
     }
 
     @ApiOperation("获取用户所有文件信息接口")
@@ -170,23 +186,44 @@ public class UserController {
 
     /**
      * 从前台拿到需要下载的文件的文件ID，从数据库中查找该文件对应的文件信息，再根据卷名及路径通过fastdfs工具类从fastdfs服务器下载该文件并通过HttpServletResponse返回给客户端
-     *
-     * @return 文件下载成功或失败的响应信息
      */
     @ApiOperation("下载文件接口")
     @GetMapping("/downloadFile/{fileId}")
-    public Result<?> downloadFile(@ApiParam("token") @RequestHeader("token") String token, @ApiParam("需要下载的文件ID") @PathVariable("fileId") String fileId, HttpServletResponse response) {
+    public void downloadFile(@ApiParam("token") @RequestHeader("token") String token, @ApiParam("需要下载的文件ID") @PathVariable("fileId") String fileId, HttpServletResponse response) {
         // 判断token是否过期，这里MyJwtTool.isValidToken(token)后续需要注意修改
         if (MyJwtTool.isValidToken(token)) {
-            return Result.build(null, ResultEnum.TOKEN_ERROR);
+            throw new RuntimeException("token已失效！");
         }
         com.ttyang.yourspan.pojo.File file = fileService.getFileByFid(fileId);
-        response.setHeader("Content-Disposition", "attachment; filename=" + file.getFName());
-        fastFileStorageClient.downloadFile(file.getFGroup(), file.getFPath(), ins -> {
-            IOUtils.copy(ins, response.getOutputStream());
-            return null;
-        });
-        return Result.ok();
+        response.setContentType("application/octet-stream");
+        response.addHeader("Content-Disposition", "attachment; filename=" + file.getFName());
+        response.setCharacterEncoding("UTF-8");
+        byte[] bytes = fastFileStorageClient.downloadFile(file.getFGroup(), file.getFPath(), IOUtils::toByteArray);
+        try {
+            ServletOutputStream outputStream = response.getOutputStream();
+            outputStream.write(bytes);
+        } catch (IOException e) {
+            throw new RuntimeException("文件下载失败！");
+        }
+    }
+
+    /**
+     * 该接口为下载文件接口的备用接口，不包含token验证
+     */
+    @ApiOperation("下载文件备用接口")
+    @GetMapping("/downloadFileTest/{fileId}")
+    public void downloadFileTest(@ApiParam("需要下载的文件ID") @PathVariable("fileId") String fileId, HttpServletResponse response) {
+        com.ttyang.yourspan.pojo.File file = fileService.getFileByFid(fileId);
+        response.setContentType("application/octet-stream");
+        response.addHeader("Content-Disposition", "attachment; filename=" + file.getFName());
+        response.setCharacterEncoding("UTF-8");
+        byte[] bytes = fastFileStorageClient.downloadFile(file.getFGroup(), file.getFPath(), IOUtils::toByteArray);
+        try {
+            ServletOutputStream outputStream = response.getOutputStream();
+            outputStream.write(bytes);
+        } catch (IOException e) {
+            throw new RuntimeException("文件下载失败！");
+        }
     }
 
     /**
