@@ -23,8 +23,8 @@ public class FileServiceImpl extends ServiceImpl<FileMapper, File> implements Fi
     }
 
     @Override
-    public boolean uploadFileInfo(String prefixName, Integer uid, String group, String path, String folderId, Date createTime, Date modifiedTime) {
-        return save(new File(null, prefixName, uid, group, path, Integer.valueOf(folderId), createTime, modifiedTime));
+    public boolean uploadFileInfo(String prefixName, Integer uid, String group, String path, String folderId, Date createTime, Date modifiedTime, Boolean isPublic) {
+        return save(new File(null, prefixName, uid, group, path, Integer.valueOf(folderId), createTime, modifiedTime, isPublic, null, null));
     }
 
     @Override
@@ -45,9 +45,9 @@ public class FileServiceImpl extends ServiceImpl<FileMapper, File> implements Fi
     @Override
     public String deleteFileByFid(String fileId) {
         File file = getFileByFid(fileId);
-        String fullPath = file.getFGroup()+"/"+file.getFPath();
-        int result = baseMapper.delete(new QueryWrapper<File>().eq("f_id",Integer.valueOf(fileId)));
-        if(result == 1){
+        String fullPath = file.getFGroup() + "/" + file.getFPath();
+        int result = baseMapper.delete(new QueryWrapper<File>().eq("f_id", Integer.valueOf(fileId)));
+        if (result == 1) {
             return fullPath;
         }
         return null;
@@ -59,5 +59,20 @@ public class FileServiceImpl extends ServiceImpl<FileMapper, File> implements Fi
         file.setFVirtualFolder(Integer.valueOf(targetFolderId));
         file.setFLastModifiedTime(Date.valueOf(LocalDate.now()));
         return updateById(file);
+    }
+
+    @Override
+    public boolean setFileAuthority(String fileId, Boolean authority) {
+        File file = getFileByFid(fileId);
+        file.setAuthority(authority);
+        file.setFLastModifiedTime(Date.valueOf(LocalDate.now()));
+        return updateById(file);
+    }
+
+    @Override
+    public List<File> getPublicFiles() {
+        QueryWrapper<File> queryWrapper = new QueryWrapper<>();
+        queryWrapper.eq("authority", true);
+        return baseMapper.selectList(queryWrapper);
     }
 }

@@ -55,4 +55,19 @@ public class File {
      */
     @TableField(value = "f_last_modified_time")
     private Date fLastModifiedTime;
+    /**
+     * 文件是否公开
+     */
+    @TableField(value = "authority")
+    private Boolean authority;
+    /**
+     * 当前用户对该文件的评分
+     */
+    @TableField(exist = false)
+    private Integer rate;
+    /**
+     * 该文件的平均评分
+     */
+    @TableField(exist = false)
+    private Double avgRate;
 }

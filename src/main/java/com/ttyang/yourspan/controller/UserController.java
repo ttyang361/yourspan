@@ -6,9 +6,11 @@ import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.github.tobato.fastdfs.domain.fdfs.StorePath;
 import com.github.tobato.fastdfs.service.FastFileStorageClient;
 import com.ttyang.yourspan.pojo.Folder;
+import com.ttyang.yourspan.pojo.Ratings;
 import com.ttyang.yourspan.pojo.User;
 import com.ttyang.yourspan.service.FileService;
 import com.ttyang.yourspan.service.FolderService;
+import com.ttyang.yourspan.service.RatingsService;
 import com.ttyang.yourspan.service.UserService;
 import com.ttyang.yourspan.util.MyJwtTool;
 import com.ttyang.yourspan.util.Result;
@@ -16,7 +18,21 @@ import com.ttyang.yourspan.util.ResultEnum;
 import io.swagger.annotations.Api;
 import io.swagger.annotations.ApiOperation;
 import io.swagger.annotations.ApiParam;
+import org.apache.commons.dbcp2.BasicDataSource;
 import org.apache.commons.io.IOUtils;
+import org.apache.mahout.cf.taste.common.TasteException;
+import org.apache.mahout.cf.taste.common.Weighting;
+import org.apache.mahout.cf.taste.impl.model.jdbc.MySQLJDBCDataModel;
+import org.apache.mahout.cf.taste.impl.neighborhood.NearestNUserNeighborhood;
+import org.apache.mahout.cf.taste.impl.recommender.GenericItemBasedRecommender;
+import org.apache.mahout.cf.taste.impl.recommender.GenericUserBasedRecommender;
+import org.apache.mahout.cf.taste.impl.similarity.PearsonCorrelationSimilarity;
+import org.apache.mahout.cf.taste.model.JDBCDataModel;
+import org.apache.mahout.cf.taste.neighborhood.UserNeighborhood;
+import org.apache.mahout.cf.taste.recommender.RecommendedItem;
+import org.apache.mahout.cf.taste.recommender.Recommender;
+import org.apache.mahout.cf.taste.similarity.ItemSimilarity;
+import org.apache.mahout.cf.taste.similarity.UserSimilarity;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
@@ -28,6 +44,7 @@ import java.nio.file.Files;
 import java.sql.Date;
 import java.time.LocalDate;
 import java.util.*;
+import java.util.stream.Collectors;
 
 /**
  * @author ttyang
@@ -47,6 +64,8 @@ public class UserController {
     private FolderService folderService;
     @Autowired
     private FastFileStorageClient fastFileStorageClient;
+    @Autowired
+    private RatingsService ratingsService;
 
     @ApiOperation("修改密码接口")
     @PostMapping("/resetPwd/{oldPwd}/{newPwd}")
@@ -170,7 +189,7 @@ public class UserController {
             // 将文件上传至fastdfs存储器中
             StorePath storePath = fastFileStorageClient.uploadFile(Files.newInputStream(file.toPath()), file.length(), suffixName, null);
             // 将文件信息存入file表内
-            boolean result = fileService.uploadFileInfo(originalFileName, uid, storePath.getGroup(), storePath.getPath(), folderId, Date.valueOf(LocalDate.now()), Date.valueOf(LocalDate.now()));
+            boolean result = fileService.uploadFileInfo(originalFileName, uid, storePath.getGroup(), storePath.getPath(), folderId, Date.valueOf(LocalDate.now()), Date.valueOf(LocalDate.now()), false);
             if (!result) {
                 throw new RuntimeException("上传文件信息失败！");
             }
@@ -287,8 +306,19 @@ public class UserController {
      * @return 设置权限成功或失败的响应信息
      */
     @ApiOperation("设置文件权限接口")
-    @PostMapping("/setFileAuthority")
-    public Result<?> setFileAuthority() {
+    @PostMapping("/setFileAuthority/{fileId}")
+    public Result<?> setFileAuthority(@ApiParam("token") @RequestHeader("token") String token, @ApiParam("文件ID") @PathVariable("fileId") String fileId, @ApiParam("权限状态") @RequestBody String authority) {
+        // 判断token是否过期，这里MyJwtTool.isValidToken(token)后续需要注意修改
+        if (MyJwtTool.isValidToken(token)) {
+            return Result.build(null, ResultEnum.TOKEN_ERROR);
+        }
+        int startIndex = authority.indexOf(":") + 1;
+        int endIndex = authority.indexOf("}");
+        authority = authority.substring(startIndex, endIndex);
+        boolean result = fileService.setFileAuthority(fileId, authority.equals("true"));
+        if (!result) {
+            throw new RuntimeException("设置文件权限异常！");
+        }
         return Result.ok();
     }
 
@@ -394,9 +424,6 @@ public class UserController {
         }
         // 颠倒folderIds的顺序，使其从子文件夹开始删除
         Collections.reverse(folderIds);
-        // 从控制台输出两个列表内容
-        System.out.println(fileIds);
-        System.out.println(folderIds);
         // 若fileIds列表的长度大于0，则遍历fileIds，调用deleteFile方法从fastdfs中删除所有对应的文件
         if (fileIds.size() > 0) {
             for (Integer fileId : fileIds) {
@@ -433,5 +460,198 @@ public class UserController {
             throw new RuntimeException("修改文件夹名称异常！");
         }
         return Result.ok();
+    }
+
+    /**
+     * 获取所有公开文件(去除当前用户公开的文件)
+     *
+     * @return 所有用户的公开文件列表
+     */
+    @ApiOperation("获取所有公开文件接口")
+    @GetMapping("/getPublicFiles")
+    public Result<?> getPublicFiles(@ApiParam("token") @RequestHeader("token") String token) {
+        // 判断token是否过期，这里MyJwtTool.isValidToken(token)后续需要注意修改
+        if (MyJwtTool.isValidToken(token)) {
+            return Result.build(null, ResultEnum.TOKEN_ERROR);
+        }
+        // 获取到当前用户的uid
+        Integer uid = MyJwtTool.getUidFromToken(token);
+        // 获取所有用户的公开文件
+        List<com.ttyang.yourspan.pojo.File> publicFiles = fileService.getPublicFiles();
+        // 去除列表中包含当前用户的公开文件
+        publicFiles.removeIf(file -> file.getFOwnerId().equals(uid));
+        // 获取当前用户的所有文件评分
+        List<Ratings> ratings = ratingsService.getRatingsByUid(uid);
+        // 将当前用户的所有文件评分存入map中
+        Map<Integer, Integer> ratingsMap = new HashMap<>();
+        for (Ratings rating : ratings) {
+            ratingsMap.put(rating.getFid(), rating.getPreference());
+        }
+        // 将所有用户的文件评分取出
+        List<Ratings> allRatings = ratingsService.list();
+        // 将所有用户的文件评分的平均值一并存入map中
+        Map<Integer, Double> allAvgRatingsMap = allRatings.stream()
+                .collect(Collectors.groupingBy(Ratings::getFid, Collectors.averagingInt(Ratings::getPreference)))
+                .entrySet().stream()
+                .collect(Collectors.toMap(Map.Entry::getKey, entry -> (double) Math.round(entry.getValue() * 10) / 10));
+        // 遍历publicFiles，将当前用户的评分和该文件的平均评分存入文件对象中
+        for (com.ttyang.yourspan.pojo.File publicFile : publicFiles) {
+            if (ratingsMap.containsKey(publicFile.getFid())) {
+                publicFile.setRate(ratingsMap.get(publicFile.getFid()));
+            }
+            if (allAvgRatingsMap.containsKey(publicFile.getFid())) {
+                publicFile.setAvgRate(allAvgRatingsMap.get(publicFile.getFid()));
+            }
+        }
+        return Result.ok(publicFiles);
+    }
+
+    /**
+     * 获取对应用户所有的公开文件
+     *
+     * @return 目标用户的公开文件列表
+     */
+    @ApiOperation("获取对应用户所有的公开文件接口")
+    @GetMapping("/getUserPublicFiles/{uid}")
+    public Result<?> getUserPublicFiles(@ApiParam("token") @RequestHeader("token") String token, @ApiParam("目标用户ID") @PathVariable("uid") Integer uid) {
+        // 判断token是否过期，这里MyJwtTool.isValidToken(token)后续需要注意修改
+        if (MyJwtTool.isValidToken(token)) {
+            return Result.build(null, ResultEnum.TOKEN_ERROR);
+        }
+        // 获取所有用户的公开文件
+        List<com.ttyang.yourspan.pojo.File> publicFiles = fileService.getPublicFiles();
+        // 去除列表中非目标用户的公开文件
+        publicFiles.removeIf(file -> !file.getFOwnerId().equals(uid));
+        return Result.ok(publicFiles);
+    }
+
+    /**
+     * 用户添加对应文件的评分
+     */
+    @ApiOperation("用户添加对应文件的评分接口")
+    @PostMapping("/addFileRate/{fileId}")
+    public Result<?> addFileRate(@ApiParam("token") @RequestHeader("token") String token, @ApiParam("目标文件ID") @PathVariable("fileId") Integer fileId, @ApiParam("目标文件评分") @RequestBody String rate) {
+        // 判断token是否过期，这里MyJwtTool.isValidToken(token)后续需要注意修改
+        if (MyJwtTool.isValidToken(token)) {
+            return Result.build(null, ResultEnum.TOKEN_ERROR);
+        }
+        // 获取到当前用户的uid
+        Integer uid = MyJwtTool.getUidFromToken(token);
+        // 处理rate
+        int rateInt = Integer.parseInt(rate.substring(rate.indexOf(":") + 1, rate.indexOf("}")));
+        // 添加评分
+        boolean result = ratingsService.addFileRate(uid, fileId, rateInt);
+        if (!result) {
+            throw new RuntimeException("添加评分异常！");
+        }
+        return Result.ok();
+    }
+
+    /**
+     * 基于用户相似度的推荐方法
+     */
+    public List<RecommendedItem> recommendByUserCF(Integer uid) {
+        //创建dataSource并连接到数据库
+        BasicDataSource dataSource = new BasicDataSource();
+        dataSource.setDriverClassName("com.mysql.cj.jdbc.Driver");
+        dataSource.setUrl("jdbc:mysql://43.143.239.108:3306/yours_pan");
+        dataSource.setUsername("root");
+        dataSource.setPassword("Yang0102");
+        // 创建DataModel
+        JDBCDataModel dataModel = new MySQLJDBCDataModel(dataSource, "ratings", "uid", "f_id", "preference", null);
+        // 使用皮尔逊相关系数计算用户相似度
+        UserSimilarity userSimilarity = null;
+        try {
+            userSimilarity = new PearsonCorrelationSimilarity(dataModel, Weighting.WEIGHTED);
+        } catch (TasteException e) {
+            throw new RuntimeException(e);
+        }
+        // 使用最近邻居算法计算用户邻居
+        UserNeighborhood userNeighborhood = null;
+        try {
+            userNeighborhood = new NearestNUserNeighborhood(5, userSimilarity, dataModel);
+        } catch (TasteException e) {
+            throw new RuntimeException(e);
+        }
+        // 使用GenericUserBasedRecommender进行推荐
+        Recommender recommender = new GenericUserBasedRecommender(dataModel, userNeighborhood, userSimilarity);
+        // 获取推荐结果
+        try {
+            return recommender.recommend(uid, 20);
+        } catch (TasteException e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+    /**
+     * 基于物品相似度的推荐方法
+     */
+    public List<RecommendedItem> recommendByItemCF(Integer uid) {
+        //创建dataSource并连接到数据库
+        BasicDataSource dataSource = new BasicDataSource();
+        dataSource.setDriverClassName("com.mysql.cj.jdbc.Driver");
+        dataSource.setUrl("jdbc:mysql://43.143.239.108:3306/yours_pan");
+        dataSource.setUsername("root");
+        dataSource.setPassword("Yang0102");
+        // 创建DataModel
+        JDBCDataModel dataModel = new MySQLJDBCDataModel(dataSource, "ratings", "uid", "f_id", "preference", null);
+        // 使用皮尔逊相关系数计算物品相似度
+        ItemSimilarity itemSimilarity = null;
+        try {
+            itemSimilarity = new PearsonCorrelationSimilarity(dataModel, Weighting.WEIGHTED);
+        } catch (TasteException e) {
+            throw new RuntimeException(e);
+        }
+        // 使用GenericItemBasedRecommender进行推荐
+        Recommender recommender = new GenericItemBasedRecommender(dataModel, itemSimilarity);
+        // 获取推荐结果
+        try {
+            return recommender.recommend(uid, 20);
+        } catch (TasteException e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+    /**
+     * 通过推荐接口获取到的文件ID，获取到文件的详细信息
+     */
+    @ApiOperation("获取指定文件的详细信息接口")
+    @GetMapping("/getRecommendFileDetail")
+    public Result<?> getRecommendFileDetail(@ApiParam("token") @RequestHeader("token") String token) {
+        // 判断token是否过期，这里MyJwtTool.isValidToken(token)后续需要注意修改
+        if (MyJwtTool.isValidToken(token)) {
+            return Result.build(null, ResultEnum.TOKEN_ERROR);
+        }
+        // 获取到当前用户的uid
+        Integer uid = MyJwtTool.getUidFromToken(token);
+        // 获取到推荐结果
+        List<RecommendedItem> recommendedItems = recommendByUserCF(uid);
+        // 获取到推荐结果中的文件ID
+        List<Integer> fileIds = new ArrayList<>();
+        for (RecommendedItem recommendedItem : recommendedItems) {
+            fileIds.add((int) recommendedItem.getItemID());
+        }
+        // 获取到推荐结果中的文件详细信息
+        List<com.ttyang.yourspan.pojo.File> files = fileService.listByIds(fileIds);
+        return Result.ok(files);
+    }
+
+    /**
+     * 将ratings表中的数据取出，并存到本地文件中，每列以,分隔，每行用换行符分隔，后续记得删除
+     */
+    @ApiOperation("测试接口")
+    @PostMapping("/test")
+    public void test() throws IOException {
+        List<Ratings> ratings = ratingsService.list();
+        try {
+            File file = new File("C:\\Users\\MECHREVO\\Desktop\\dataset\\ratings.dat");
+            FileWriter fileWriter = new FileWriter(file);
+            for (Ratings rating : ratings) {
+                fileWriter.write(rating.getUid() + "," + rating.getFid() + "," + rating.getPreference() + "\r");
+            }
+            fileWriter.close();
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
     }
 }
