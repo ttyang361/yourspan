@@ -28,7 +28,8 @@ public enum ResultEnum {
     TOKEN_ERROR(205, "token失效"),
     TIME_OUT(206, "会话已过期，请重新登陆"),
     EMAIL_NOT_VALID(207, "该邮箱未注册"),
-    EMAIL_ERROR(207, "该邮箱已被注册");
+    EMAIL_ERROR(207, "该邮箱已被注册"),
+    FILE_NOT_EXIST(208, "文件不存在");
     private final Integer code;
     private final String message;
 }

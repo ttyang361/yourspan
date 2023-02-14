@@ -97,7 +97,7 @@ public class SystemController {
     @GetMapping("/getUserInfoByToken")
     public Result<?> getUserInfoByToken(@ApiParam("token") @RequestHeader("token") String token) {
         // 判断token是否过期，这里MyJwtTool.isValidToken(token)后续需要注意修改
-        if (MyJwtTool.isValidToken(token)) {
+        if (MyJwtTool.isNotValidToken(token)) {
             return Result.build(null, ResultEnum.TOKEN_ERROR);
         }
         // 从token中获取uid
@@ -199,7 +199,7 @@ public class SystemController {
     @GetMapping("/getAllMenusByToken")
     public Result<?> getAllMenusByToken(@ApiParam("token") @RequestHeader("token") String token) {
         // 判断token是否过期，这里MyJwtTool.isValidToken(token)后续需要注意修改
-        if (MyJwtTool.isValidToken(token)) {
+        if (MyJwtTool.isNotValidToken(token)) {
             return Result.build(null, ResultEnum.TOKEN_ERROR);
         }
         // 从数据库获取所有目录表数据并以List<Menu>形式返回

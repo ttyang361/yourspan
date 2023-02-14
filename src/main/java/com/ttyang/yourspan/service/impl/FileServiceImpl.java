@@ -19,12 +19,13 @@ public class FileServiceImpl extends ServiceImpl<FileMapper, File> implements Fi
     public List<File> getAllFilesByUid(Integer uid) {
         QueryWrapper<File> queryWrapper = new QueryWrapper<>();
         queryWrapper.eq("f_owner_id", uid);
+        queryWrapper.eq("f_delete", false);
         return baseMapper.selectList(queryWrapper);
     }
 
     @Override
-    public boolean uploadFileInfo(String prefixName, Integer uid, String group, String path, String folderId, Date createTime, Date modifiedTime, Boolean isPublic) {
-        return save(new File(null, prefixName, uid, group, path, Integer.valueOf(folderId), createTime, modifiedTime, isPublic, null, null));
+    public boolean uploadFileInfo(String prefixName, Integer uid, String group, String path, String folderId, Date createTime, Date modifiedTime, Boolean isPublic, Long fileSize) {
+        return save(new File(null, prefixName, uid, group, path, Integer.valueOf(folderId), createTime, modifiedTime, isPublic, fileSize, false, null, null));
     }
 
     @Override
@@ -73,6 +74,28 @@ public class FileServiceImpl extends ServiceImpl<FileMapper, File> implements Fi
     public List<File> getPublicFiles() {
         QueryWrapper<File> queryWrapper = new QueryWrapper<>();
         queryWrapper.eq("authority", true);
+        return baseMapper.selectList(queryWrapper);
+    }
+
+    @Override
+    public boolean moveToRecycleBin(String fileId) {
+        File file = getFileByFid(fileId);
+        file.setFDelete(true);
+        return updateById(file);
+    }
+
+    @Override
+    public boolean restoreFromRecycleBin(String fileId) {
+        File file = getFileByFid(fileId);
+        file.setFDelete(false);
+        return updateById(file);
+    }
+
+    @Override
+    public List<File> getRecycleBinFileList(Integer uid) {
+        QueryWrapper<File> queryWrapper = new QueryWrapper<>();
+        queryWrapper.eq("f_owner_id", uid);
+        queryWrapper.eq("f_delete", true);
         return baseMapper.selectList(queryWrapper);
     }
 }

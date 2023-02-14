@@ -43,7 +43,7 @@ public class User {
      * 用户所属云盘根目录
      */
     @TableField(value = "root_fdir_path")
-    private String rootFdirPath;
+    private Integer rootFdirPath;
     /**
      * 用户头像文件路径
      */

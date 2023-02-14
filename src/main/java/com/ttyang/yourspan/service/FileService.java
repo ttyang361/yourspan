@@ -9,7 +9,7 @@ import java.util.List;
 public interface FileService extends IService<File> {
     List<File> getAllFilesByUid(Integer uid);
 
-    boolean uploadFileInfo(String prefixName, Integer uid, String group, String path, String folderId, Date createTime, Date modifiedTime, Boolean isPublic);
+    boolean uploadFileInfo(String prefixName, Integer uid, String group, String path, String folderId, Date createTime, Date modifiedTime, Boolean isPublic, Long fileSize);
 
     File getFileByFid(String fileId);
 
@@ -22,4 +22,10 @@ public interface FileService extends IService<File> {
     boolean setFileAuthority(String fileId, Boolean authority);
 
     List<File> getPublicFiles();
+
+    boolean moveToRecycleBin(String fileId);
+
+    boolean restoreFromRecycleBin(String fileId);
+
+    List<File> getRecycleBinFileList(Integer uid);
 }

@@ -9,4 +9,6 @@ public interface RatingsService extends IService<Ratings> {
     boolean addFileRate(Integer uid, Integer fileId, int rateInt);
 
     List<Ratings> getRatingsByUid(Integer uid);
+
+    void deleteRatingsByFid(String fileId);
 }

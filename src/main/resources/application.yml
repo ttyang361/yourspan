@@ -30,6 +30,15 @@ spring:
     multipart:
       max-file-size: 10MB
       max-request-size: 100MB
+  redis:
+    host: 43.143.239.108
+    port: 6379
+    password:
+    database: 0
+    timeout: 60000
+  cache:
+    redis:
+      time-to-live: 3600000
 mybatis-plus:
   configuration:
     log-impl: org.apache.ibatis.logging.stdout.StdOutImpl

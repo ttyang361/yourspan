@@ -1,6 +1,9 @@
 package com.ttyang.yourspan.util;
 
+import cn.hutool.core.date.DateField;
+import cn.hutool.core.date.DateUtil;
 import cn.hutool.jwt.JWT;
+import cn.hutool.jwt.JWTValidator;
 
 /**
  * @author ttyang
@@ -8,12 +11,21 @@ import cn.hutool.jwt.JWT;
  * @since 2022-11-17
  */
 public class MyJwtTool {
-    private static final byte[] KEY = "1234567890".getBytes();
+    private static final byte[] KEY = "3BcKvp0FhPEzXrIJ".getBytes();
 
     public static String createTokenByUid(Integer uid) {
         return JWT.create()
                 .setPayload("uid", uid)
                 .setKey(KEY)
+                .setExpiresAt(DateUtil.offset(DateUtil.date(), DateField.HOUR, 1))
+                .sign();
+    }
+
+    public static String createTokenByFid(Integer fid) {
+        return JWT.create()
+                .setPayload("fid", fid)
+                .setKey(KEY)
+                .setExpiresAt(DateUtil.offset(DateUtil.date(), DateField.HOUR, 1))
                 .sign();
     }
 
@@ -21,7 +33,17 @@ public class MyJwtTool {
         return (Integer) JWT.of(token).getPayload("uid");
     }
 
-    public static boolean isValidToken(String token) {
-        return JWT.of(token).validate(0);
+    public static Integer getFidFromToken(String token) {
+        return (Integer) JWT.of(token).getPayload("fid");
     }
+
+    public static boolean isNotValidToken(String token) {
+        try {
+            JWTValidator.of(token).validateDate(DateUtil.date());
+        } catch (Exception e) {
+            return true;
+        }
+        return false;
+    }
+
 }

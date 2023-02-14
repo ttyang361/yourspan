@@ -1,17 +1,21 @@
 package com.ttyang.yourspan.service.impl;
 
+import cn.hutool.core.lang.UUID;
 import cn.hutool.crypto.digest.DigestUtil;
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.UpdateWrapper;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.ttyang.yourspan.mapper.UserMapper;
-import com.ttyang.yourspan.pojo.ForgetForm;
-import com.ttyang.yourspan.pojo.LoginForm;
-import com.ttyang.yourspan.pojo.RegisterForm;
-import com.ttyang.yourspan.pojo.User;
+import com.ttyang.yourspan.pojo.*;
+import com.ttyang.yourspan.service.CapacityService;
+import com.ttyang.yourspan.service.FolderService;
 import com.ttyang.yourspan.service.UserService;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+
+import java.sql.Date;
+import java.time.LocalDate;
 
 /**
  * @author ttyang
@@ -21,6 +25,11 @@ import org.springframework.transaction.annotation.Transactional;
 @Service("userServiceImpl")
 @Transactional(rollbackFor = Exception.class)
 public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements UserService {
+    @Autowired
+    private FolderService folderService;
+    @Autowired
+    private CapacityService capacityService;
+
     @Override
     public User login(LoginForm loginForm) {
         return baseMapper.selectOne(new QueryWrapper<User>().eq("uid", loginForm.getUserId()).eq("password", DigestUtil.md5Hex(loginForm.getPassword())));
@@ -39,9 +48,20 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
     @Override
     public User register(RegisterForm registerForm) {
         // 向表中新增用户
-        save(new User(null, DigestUtil.md5Hex(registerForm.getPassword()), registerForm.getEmail(), null, null, null, null));
-        // 通过queryWrapper从数据库中获取该注册邮箱的User对象并返回
-        return baseMapper.selectOne(new QueryWrapper<User>().eq("email", registerForm.getEmail()));
+        save(new User(null, DigestUtil.md5Hex(registerForm.getPassword()), registerForm.getEmail(), "用户" + UUID.fastUUID(), null, null, null));
+        // 通过queryWrapper从数据库中获取该注册邮箱的User对象
+        User user = baseMapper.selectOne(new QueryWrapper<User>().eq("email", registerForm.getEmail()));
+        // 在folder表中添加一个新文件夹
+        if (folderService.createNewFolder("我的资源", "1", user.getUid(), Date.valueOf(LocalDate.now()), Date.valueOf(LocalDate.now()))) {
+            Folder folder = folderService.getFolderByUidAndParentFolderId(user.getUid(), 1);
+            // 将用户根文件夹id设置为该文件夹id
+            user.setRootFdirPath(folder.getFlid());
+            updateById(user);
+            // 初始化该用户的容量数据
+            capacityService.save(new Capacity(user.getUid(), 512.0, 0.0));
+            return user;
+        }
+        return null;
     }
 
     @Override

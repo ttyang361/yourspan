@@ -29,9 +29,14 @@ public class FolderServiceImpl extends ServiceImpl<FolderMapper, Folder> impleme
 
     @Override
     public boolean modifyFolderName(String currentFolderId, String newFolderName) {
-        Folder folder = baseMapper.selectOne(new QueryWrapper<Folder>().eq("fl_id",Integer.valueOf(currentFolderId)));
+        Folder folder = baseMapper.selectOne(new QueryWrapper<Folder>().eq("fl_id", Integer.valueOf(currentFolderId)));
         folder.setFlName(newFolderName);
         folder.setFlLastModifiedTime(Date.valueOf(LocalDate.now()));
         return updateById(folder);
+    }
+
+    @Override
+    public Folder getFolderByUidAndParentFolderId(Integer uid, int parentFolderId) {
+        return baseMapper.selectOne(new QueryWrapper<Folder>().eq("fl_owner_id", uid).eq("fl_parent_id", parentFolderId));
     }
 }

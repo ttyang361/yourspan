@@ -5,20 +5,17 @@ import cn.hutool.crypto.digest.DigestUtil;
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.github.tobato.fastdfs.domain.fdfs.StorePath;
 import com.github.tobato.fastdfs.service.FastFileStorageClient;
+import com.ttyang.yourspan.pojo.Capacity;
 import com.ttyang.yourspan.pojo.Folder;
 import com.ttyang.yourspan.pojo.Ratings;
 import com.ttyang.yourspan.pojo.User;
-import com.ttyang.yourspan.service.FileService;
-import com.ttyang.yourspan.service.FolderService;
-import com.ttyang.yourspan.service.RatingsService;
-import com.ttyang.yourspan.service.UserService;
+import com.ttyang.yourspan.service.*;
 import com.ttyang.yourspan.util.MyJwtTool;
 import com.ttyang.yourspan.util.Result;
 import com.ttyang.yourspan.util.ResultEnum;
 import io.swagger.annotations.Api;
 import io.swagger.annotations.ApiOperation;
 import io.swagger.annotations.ApiParam;
-import org.apache.commons.dbcp2.BasicDataSource;
 import org.apache.commons.io.IOUtils;
 import org.apache.mahout.cf.taste.common.TasteException;
 import org.apache.mahout.cf.taste.common.Weighting;
@@ -34,11 +31,13 @@ import org.apache.mahout.cf.taste.recommender.Recommender;
 import org.apache.mahout.cf.taste.similarity.ItemSimilarity;
 import org.apache.mahout.cf.taste.similarity.UserSimilarity;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
 import javax.servlet.ServletOutputStream;
 import javax.servlet.http.HttpServletResponse;
+import javax.sql.DataSource;
 import java.io.*;
 import java.nio.file.Files;
 import java.sql.Date;
@@ -66,12 +65,16 @@ public class UserController {
     private FastFileStorageClient fastFileStorageClient;
     @Autowired
     private RatingsService ratingsService;
+    @Autowired
+    private CapacityService capacityService;
+    @Autowired
+    private DataSource dataSource;
 
     @ApiOperation("修改密码接口")
     @PostMapping("/resetPwd/{oldPwd}/{newPwd}")
     public Result<?> resetPwd(@ApiParam("token") @RequestHeader String token, @ApiParam("旧密码") @PathVariable("oldPwd") String oldPwd, @ApiParam("新密码") @PathVariable("newPwd") String newPwd) {
         // 若token已过期
-        if (MyJwtTool.isValidToken(token)) {
+        if (MyJwtTool.isNotValidToken(token)) {
             return Result.build(null, ResultEnum.TOKEN_ERROR);
         }
         oldPwd = DigestUtil.md5Hex(oldPwd);
@@ -131,7 +134,7 @@ public class UserController {
     @GetMapping("/getFilesByToken")
     public Result<?> getFilesByToken(@ApiParam("token") @RequestHeader("token") String token) {
         // 判断token是否过期，这里MyJwtTool.isValidToken(token)后续需要注意修改
-        if (MyJwtTool.isValidToken(token)) {
+        if (MyJwtTool.isNotValidToken(token)) {
             return Result.build(null, ResultEnum.TOKEN_ERROR);
         }
         // 从token中获取到用户的uid
@@ -166,7 +169,7 @@ public class UserController {
     @PostMapping("/uploadFile/{folderId}")
     public Result<?> uploadFile(@ApiParam("token") @RequestHeader("token") String token, @ApiParam("用户上传文件") @RequestPart("multipartFile") MultipartFile multipartFile, @ApiParam("所属文件夹id") @PathVariable("folderId") String folderId) {
         // 判断token是否过期，这里MyJwtTool.isValidToken(token)后续需要注意修改
-        if (MyJwtTool.isValidToken(token)) {
+        if (MyJwtTool.isNotValidToken(token)) {
             return Result.build(null, ResultEnum.TOKEN_ERROR);
         }
         // 从token中获取到用户的uid
@@ -175,6 +178,11 @@ public class UserController {
         String originalFileName = Objects.requireNonNull(multipartFile.getOriginalFilename());
         String prefixName = originalFileName.substring(0, originalFileName.lastIndexOf("."));
         String suffixName = originalFileName.substring(originalFileName.lastIndexOf(".") + 1);
+        // 取出文件大小
+        long fileSize = multipartFile.getSize();
+        fileSize = fileSize >> 10;
+        // 更新capacity表内容
+        boolean updateResult = capacityService.updateCapacity(uid, fileSize);
         // 将multipartFile转换为File对象
         try {
             // 创建临时文件
@@ -189,8 +197,8 @@ public class UserController {
             // 将文件上传至fastdfs存储器中
             StorePath storePath = fastFileStorageClient.uploadFile(Files.newInputStream(file.toPath()), file.length(), suffixName, null);
             // 将文件信息存入file表内
-            boolean result = fileService.uploadFileInfo(originalFileName, uid, storePath.getGroup(), storePath.getPath(), folderId, Date.valueOf(LocalDate.now()), Date.valueOf(LocalDate.now()), false);
-            if (!result) {
+            boolean result = fileService.uploadFileInfo(originalFileName, uid, storePath.getGroup(), storePath.getPath(), folderId, Date.valueOf(LocalDate.now()), Date.valueOf(LocalDate.now()), false, fileSize);
+            if (!result || !updateResult) {
                 throw new RuntimeException("上传文件信息失败！");
             }
             // 删除临时文件
@@ -210,7 +218,7 @@ public class UserController {
     @GetMapping("/downloadFile/{fileId}")
     public void downloadFile(@ApiParam("token") @RequestHeader("token") String token, @ApiParam("需要下载的文件ID") @PathVariable("fileId") String fileId, HttpServletResponse response) {
         // 判断token是否过期，这里MyJwtTool.isValidToken(token)后续需要注意修改
-        if (MyJwtTool.isValidToken(token)) {
+        if (MyJwtTool.isNotValidToken(token)) {
             throw new RuntimeException("token已失效！");
         }
         com.ttyang.yourspan.pojo.File file = fileService.getFileByFid(fileId);
@@ -254,7 +262,7 @@ public class UserController {
     @PostMapping("/changeFileName/{fileId}")
     public Result<?> changeFileName(@ApiParam("token") @RequestHeader("token") String token, @ApiParam("文件ID") @PathVariable("fileId") String fileId, @ApiParam("修改后的文件名") @RequestBody String newFileName) {
         // 判断token是否过期，这里MyJwtTool.isValidToken(token)后续需要注意修改
-        if (MyJwtTool.isValidToken(token)) {
+        if (MyJwtTool.isNotValidToken(token)) {
             return Result.build(null, ResultEnum.TOKEN_ERROR);
         }
         // 处理folderName
@@ -269,18 +277,79 @@ public class UserController {
     }
 
     /**
+     * 将文件移动到回收站
+     *
+     * @return 文件移动成功或失败的响应信息
+     */
+    @ApiOperation("将文件移动到回收站接口")
+    @PostMapping("/moveToRecycleBin/{fileId}")
+    public Result<?> moveToRecycleBin(@ApiParam("token") @RequestHeader("token") String token, @ApiParam("文件ID") @PathVariable("fileId") String fileId) {
+        // 判断token是否过期，这里MyJwtTool.isValidToken(token)后续需要注意修改
+        if (MyJwtTool.isNotValidToken(token)) {
+            return Result.build(null, ResultEnum.TOKEN_ERROR);
+        }
+        boolean result = fileService.moveToRecycleBin(fileId);
+        if (!result) {
+            throw new RuntimeException("文件移动到回收站异常！");
+        }
+        return Result.ok();
+    }
+
+    /**
+     * 将文件从回收站还原
+     *
+     * @return 文件还原成功或失败的响应信息
+     */
+    @ApiOperation("将文件从回收站还原接口")
+    @PostMapping("/restoreFromRecycleBin/{fileId}")
+    public Result<?> restoreFromRecycleBin(@ApiParam("token") @RequestHeader("token") String token, @ApiParam("文件ID") @PathVariable("fileId") String fileId) {
+        // 判断token是否过期，这里MyJwtTool.isValidToken(token)后续需要注意修改
+        if (MyJwtTool.isNotValidToken(token)) {
+            return Result.build(null, ResultEnum.TOKEN_ERROR);
+        }
+        boolean result = fileService.restoreFromRecycleBin(fileId);
+        if (!result) {
+            throw new RuntimeException("文件从回收站还原异常！");
+        }
+        return Result.ok();
+    }
+
+    /**
+     * 获取回收站文件列表
+     *
+     * @return 回收站文件列表
+     */
+    @ApiOperation("获取回收站文件列表接口")
+    @GetMapping("/getRecycleBinFileList")
+    public Result<?> getRecycleBinFileList(@ApiParam("token") @RequestHeader("token") String token) {
+        // 判断token是否过期，这里MyJwtTool.isValidToken(token)后续需要注意修改
+        if (MyJwtTool.isNotValidToken(token)) {
+            return Result.build(null, ResultEnum.TOKEN_ERROR);
+        }
+        List<com.ttyang.yourspan.pojo.File> fileList = fileService.getRecycleBinFileList(MyJwtTool.getUidFromToken(token));
+        return Result.ok(fileList);
+    }
+
+    /**
      * 从前台拿到需要删除的文件的fid，根据卷名及路径通过fastdfs工具类从fastdfs服务器删除该文件，并利用FileService访问数据库通过fid查找到该文件信息并进行删除操作
      *
      * @return 文件删除成功或失败的响应信息
      */
-    @ApiOperation("删除文件接口")
+    @ApiOperation("彻底删除文件接口")
     @PostMapping("/deleteFile/{fileId}")
     public Result<?> deleteFile(@ApiParam("token") @RequestHeader("token") String token, @ApiParam("文件ID") @PathVariable("fileId") String fileId) {
         // 判断token是否过期，这里MyJwtTool.isValidToken(token)后续需要注意修改
-        if (MyJwtTool.isValidToken(token)) {
+        if (MyJwtTool.isNotValidToken(token)) {
             return Result.build(null, ResultEnum.TOKEN_ERROR);
         }
+        // 取出文件的大小和卷名，并删除表内文件信息
+        com.ttyang.yourspan.pojo.File file = fileService.getFileByFid(fileId);
         String fullPath = fileService.deleteFileByFid(fileId);
+        // 删除ratings表中相关评分数据
+        ratingsService.deleteRatingsByFid(fileId);
+        // 更新capacity表中的数据
+        long fileSize = file.getFSize();
+        capacityService.updateCapacity1(MyJwtTool.getUidFromToken(token), fileSize);
         if (fullPath != null) {
             fastFileStorageClient.deleteFile(fullPath);
         } else {
@@ -290,14 +359,37 @@ public class UserController {
     }
 
     /**
-     * 暂不实现，前台发送该文件的fid，利用FileService访问数据库通过fid查找到该文件信息，根据文件信息去生成对应的链接，进一步选择保存该文件到自己的网盘或者直接下载该文件，另外可以拓展出分享链接附带访问密码的功能
+     * 根据用户需要保存的文件的id生成对应的jwt token，该token中包含了文件的id
      *
-     * @return 生成的分享文件的链接
+     * @return 生成的分享文件的token
      */
-    @ApiOperation("分享文件接口")
-    @GetMapping("/getShareLink")
-    public Result<?> getShareLink() {
-        return Result.ok();
+    @ApiOperation("生成文件token接口")
+    @GetMapping("/getShareToken/{fileId}")
+    public Result<?> getShareLink(@ApiParam("token") @RequestHeader("token") String token, @ApiParam("文件ID") @PathVariable("fileId") String fileId) {
+        // 判断token是否过期，这里MyJwtTool.isValidToken(token)后续需要注意修改
+        if (MyJwtTool.isNotValidToken(token)) {
+            return Result.build(null, ResultEnum.TOKEN_ERROR);
+        }
+        return Result.ok(MyJwtTool.createTokenByFid(Integer.valueOf(fileId)));
+    }
+
+    /**
+     * 通过获取到的token解析出fid并将文件信息返回给前端，选择保存该文件到自己的网盘或者直接下载该文件，另外可以拓展出分享链接附带访问密码的功能
+     */
+    @ApiOperation("解析文件token接口")
+    @GetMapping("/parseShareToken/{fileToken}")
+    public Result<?> parseShareToken(@ApiParam("token") @RequestHeader("token") String token, @ApiParam("文件token") @PathVariable("fileToken") String fileToken) {
+        // 判断token是否过期，这里MyJwtTool.isValidToken(token)后续需要注意修改
+        if (MyJwtTool.isNotValidToken(token)) {
+            return Result.build(null, ResultEnum.TOKEN_ERROR);
+        }
+        Integer fid = MyJwtTool.getFidFromToken(fileToken);
+        com.ttyang.yourspan.pojo.File file = fileService.getFileByFid(fid.toString());
+        if (file != null) {
+            return Result.ok(file);
+        } else {
+            return Result.build(null, ResultEnum.FILE_NOT_EXIST);
+        }
     }
 
     /**
@@ -309,7 +401,7 @@ public class UserController {
     @PostMapping("/setFileAuthority/{fileId}")
     public Result<?> setFileAuthority(@ApiParam("token") @RequestHeader("token") String token, @ApiParam("文件ID") @PathVariable("fileId") String fileId, @ApiParam("权限状态") @RequestBody String authority) {
         // 判断token是否过期，这里MyJwtTool.isValidToken(token)后续需要注意修改
-        if (MyJwtTool.isValidToken(token)) {
+        if (MyJwtTool.isNotValidToken(token)) {
             return Result.build(null, ResultEnum.TOKEN_ERROR);
         }
         int startIndex = authority.indexOf(":") + 1;
@@ -331,7 +423,7 @@ public class UserController {
     @PostMapping("/moveFile/{fileId}")
     public Result<?> moveFile(@ApiParam("token") @RequestHeader("token") String token, @ApiParam("文件ID") @PathVariable("fileId") String fileId, @ApiParam("目标文件夹id") @RequestBody String targetFolderId) {
         // 判断token是否过期，这里MyJwtTool.isValidToken(token)后续需要注意修改
-        if (MyJwtTool.isValidToken(token)) {
+        if (MyJwtTool.isNotValidToken(token)) {
             return Result.build(null, ResultEnum.TOKEN_ERROR);
         }
         // 处理targetFolderId
@@ -354,7 +446,7 @@ public class UserController {
     @PostMapping("/createNewFolder/{folderId}")
     public Result<?> createNewFolder(@ApiParam("token") @RequestHeader("token") String token, @ApiParam("父级文件夹ID") @PathVariable("folderId") String parentFolderId, @ApiParam("文件夹名称") @RequestBody String folderName) {
         // 判断token是否过期，这里MyJwtTool.isValidToken(token)后续需要注意修改
-        if (MyJwtTool.isValidToken(token)) {
+        if (MyJwtTool.isNotValidToken(token)) {
             return Result.build(null, ResultEnum.TOKEN_ERROR);
         }
         // 处理folderName
@@ -379,7 +471,7 @@ public class UserController {
     @PostMapping("/deleteFolder/{folderId}")
     public Result<?> deleteFolder(@ApiParam("token") @RequestHeader("token") String token, @ApiParam("文件夹ID") @PathVariable("folderId") String targetFolderId) {
         // 判断token是否过期，这里MyJwtTool.isValidToken(token)后续需要注意修改
-        if (MyJwtTool.isValidToken(token)) {
+        if (MyJwtTool.isNotValidToken(token)) {
             return Result.build(null, ResultEnum.TOKEN_ERROR);
         }
         // 拿到该用户的根文件夹
@@ -448,7 +540,7 @@ public class UserController {
     @PostMapping("/changeFolderName/{folderId}")
     public Result<?> changeFolderName(@ApiParam("token") @RequestHeader("token") String token, @ApiParam("文件夹ID") @PathVariable("folderId") String currentFolderId, @ApiParam("更改后的文件夹名称") @RequestBody String newFolderName) {
         // 判断token是否过期，这里MyJwtTool.isValidToken(token)后续需要注意修改
-        if (MyJwtTool.isValidToken(token)) {
+        if (MyJwtTool.isNotValidToken(token)) {
             return Result.build(null, ResultEnum.TOKEN_ERROR);
         }
         // 处理folderName
@@ -471,7 +563,7 @@ public class UserController {
     @GetMapping("/getPublicFiles")
     public Result<?> getPublicFiles(@ApiParam("token") @RequestHeader("token") String token) {
         // 判断token是否过期，这里MyJwtTool.isValidToken(token)后续需要注意修改
-        if (MyJwtTool.isValidToken(token)) {
+        if (MyJwtTool.isNotValidToken(token)) {
             return Result.build(null, ResultEnum.TOKEN_ERROR);
         }
         // 获取到当前用户的uid
@@ -515,7 +607,7 @@ public class UserController {
     @GetMapping("/getUserPublicFiles/{uid}")
     public Result<?> getUserPublicFiles(@ApiParam("token") @RequestHeader("token") String token, @ApiParam("目标用户ID") @PathVariable("uid") Integer uid) {
         // 判断token是否过期，这里MyJwtTool.isValidToken(token)后续需要注意修改
-        if (MyJwtTool.isValidToken(token)) {
+        if (MyJwtTool.isNotValidToken(token)) {
             return Result.build(null, ResultEnum.TOKEN_ERROR);
         }
         // 获取所有用户的公开文件
@@ -532,7 +624,7 @@ public class UserController {
     @PostMapping("/addFileRate/{fileId}")
     public Result<?> addFileRate(@ApiParam("token") @RequestHeader("token") String token, @ApiParam("目标文件ID") @PathVariable("fileId") Integer fileId, @ApiParam("目标文件评分") @RequestBody String rate) {
         // 判断token是否过期，这里MyJwtTool.isValidToken(token)后续需要注意修改
-        if (MyJwtTool.isValidToken(token)) {
+        if (MyJwtTool.isNotValidToken(token)) {
             return Result.build(null, ResultEnum.TOKEN_ERROR);
         }
         // 获取到当前用户的uid
@@ -551,23 +643,17 @@ public class UserController {
      * 基于用户相似度的推荐方法
      */
     public List<RecommendedItem> recommendByUserCF(Integer uid) {
-        //创建dataSource并连接到数据库
-        BasicDataSource dataSource = new BasicDataSource();
-        dataSource.setDriverClassName("com.mysql.cj.jdbc.Driver");
-        dataSource.setUrl("jdbc:mysql://43.143.239.108:3306/yours_pan");
-        dataSource.setUsername("root");
-        dataSource.setPassword("Yang0102");
         // 创建DataModel
         JDBCDataModel dataModel = new MySQLJDBCDataModel(dataSource, "ratings", "uid", "f_id", "preference", null);
         // 使用皮尔逊相关系数计算用户相似度
-        UserSimilarity userSimilarity = null;
+        UserSimilarity userSimilarity;
         try {
             userSimilarity = new PearsonCorrelationSimilarity(dataModel, Weighting.WEIGHTED);
         } catch (TasteException e) {
             throw new RuntimeException(e);
         }
         // 使用最近邻居算法计算用户邻居
-        UserNeighborhood userNeighborhood = null;
+        UserNeighborhood userNeighborhood;
         try {
             userNeighborhood = new NearestNUserNeighborhood(5, userSimilarity, dataModel);
         } catch (TasteException e) {
@@ -587,16 +673,10 @@ public class UserController {
      * 基于物品相似度的推荐方法
      */
     public List<RecommendedItem> recommendByItemCF(Integer uid) {
-        //创建dataSource并连接到数据库
-        BasicDataSource dataSource = new BasicDataSource();
-        dataSource.setDriverClassName("com.mysql.cj.jdbc.Driver");
-        dataSource.setUrl("jdbc:mysql://43.143.239.108:3306/yours_pan");
-        dataSource.setUsername("root");
-        dataSource.setPassword("Yang0102");
         // 创建DataModel
         JDBCDataModel dataModel = new MySQLJDBCDataModel(dataSource, "ratings", "uid", "f_id", "preference", null);
         // 使用皮尔逊相关系数计算物品相似度
-        ItemSimilarity itemSimilarity = null;
+        ItemSimilarity itemSimilarity;
         try {
             itemSimilarity = new PearsonCorrelationSimilarity(dataModel, Weighting.WEIGHTED);
         } catch (TasteException e) {
@@ -615,43 +695,50 @@ public class UserController {
     /**
      * 通过推荐接口获取到的文件ID，获取到文件的详细信息
      */
-    @ApiOperation("获取指定文件的详细信息接口")
+    @ApiOperation("获取推荐文件的详细信息接口")
     @GetMapping("/getRecommendFileDetail")
-    public Result<?> getRecommendFileDetail(@ApiParam("token") @RequestHeader("token") String token) {
+    @Cacheable(cacheNames = "recommendFileList")
+    public List<com.ttyang.yourspan.pojo.File> getRecommendFileDetail(@ApiParam("token") @RequestHeader("token") String token) {
         // 判断token是否过期，这里MyJwtTool.isValidToken(token)后续需要注意修改
-        if (MyJwtTool.isValidToken(token)) {
-            return Result.build(null, ResultEnum.TOKEN_ERROR);
+        if (MyJwtTool.isNotValidToken(token)) {
+            throw new RuntimeException("token过期！");
         }
         // 获取到当前用户的uid
         Integer uid = MyJwtTool.getUidFromToken(token);
         // 获取到推荐结果
         List<RecommendedItem> recommendedItems = recommendByUserCF(uid);
         // 获取到推荐结果中的文件ID
-        List<Integer> fileIds = new ArrayList<>();
-        for (RecommendedItem recommendedItem : recommendedItems) {
-            fileIds.add((int) recommendedItem.getItemID());
+        List<Integer> fileIds = recommendedItems.stream().map(e -> (int) e.getItemID()).collect(Collectors.toList());
+        if (fileIds.size() == 0) {
+            return new ArrayList<>();
         }
-        // 获取到推荐结果中的文件详细信息
-        List<com.ttyang.yourspan.pojo.File> files = fileService.listByIds(fileIds);
-        return Result.ok(files);
+        return fileService.listByIds(fileIds);
     }
 
     /**
-     * 将ratings表中的数据取出，并存到本地文件中，每列以,分隔，每行用换行符分隔，后续记得删除
+     * 获取用户剩余的可用空间
+     */
+    @ApiOperation("获取用户剩余的可用空间接口")
+    @GetMapping("/getCapacity")
+    public Result<?> getAvailableSpace(@ApiParam("token") @RequestHeader("token") String token) {
+        // 判断token是否过期，这里MyJwtTool.isValidToken(token)后续需要注意修改
+        if (MyJwtTool.isNotValidToken(token)) {
+            return Result.build(null, ResultEnum.TOKEN_ERROR);
+        }
+        // 获取到当前用户的uid
+        Integer uid = MyJwtTool.getUidFromToken(token);
+        // 获取用户容量对象
+        Capacity capacity = capacityService.getOne(new QueryWrapper<Capacity>().eq("uid", uid));
+        Map<String, Capacity> map = new LinkedHashMap<>();
+        map.put("capacity", capacity);
+        return Result.ok(map);
+    }
+
+    /**
+     * 自定义测试接口，后续记得删除
      */
     @ApiOperation("测试接口")
     @PostMapping("/test")
-    public void test() throws IOException {
-        List<Ratings> ratings = ratingsService.list();
-        try {
-            File file = new File("C:\\Users\\MECHREVO\\Desktop\\dataset\\ratings.dat");
-            FileWriter fileWriter = new FileWriter(file);
-            for (Ratings rating : ratings) {
-                fileWriter.write(rating.getUid() + "," + rating.getFid() + "," + rating.getPreference() + "\r");
-            }
-            fileWriter.close();
-        } catch (IOException e) {
-            e.printStackTrace();
-        }
+    public void test() {
     }
 }

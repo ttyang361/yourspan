@@ -38,4 +38,11 @@ public class RatingsServiceImpl extends ServiceImpl<RatingsMapper, Ratings> impl
         queryWrapper.eq("uid", uid);
         return baseMapper.selectList(queryWrapper);
     }
+
+    @Override
+    public void deleteRatingsByFid(String fileId) {
+        QueryWrapper<Ratings> queryWrapper = new QueryWrapper<>();
+        queryWrapper.eq("f_id", Integer.valueOf(fileId));
+        baseMapper.delete(queryWrapper);
+    }
 }

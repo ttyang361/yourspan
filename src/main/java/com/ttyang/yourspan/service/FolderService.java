@@ -12,4 +12,6 @@ public interface FolderService extends IService<Folder> {
     boolean createNewFolder(String folderName, String parentFolderId, Integer uid, Date createTime, Date modifiedTime);
 
     boolean modifyFolderName(String currentFolderId, String newFolderName);
+
+    Folder getFolderByUidAndParentFolderId(Integer uid, int parentFolderId);
 }

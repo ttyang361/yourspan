@@ -8,13 +8,14 @@ import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
+import java.io.Serializable;
 import java.sql.Date;
 
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
 @TableName("file")
-public class File {
+public class File implements Serializable {
     /**
      * 文件id
      */
@@ -60,6 +61,16 @@ public class File {
      */
     @TableField(value = "authority")
     private Boolean authority;
+    /**
+     * 文件大小
+     */
+    @TableField(value = "f_size")
+    private Long fSize;
+    /**
+     * 文件是否被删除
+     */
+    @TableField(value = "f_delete")
+    private Boolean fDelete;
     /**
      * 当前用户对该文件的评分
      */
