@@ -49,4 +49,14 @@ public class User {
      */
     @TableField(value = "avatar_path")
     private String avatarPath;
+    /**
+     * 是否为管理员
+     */
+    @TableField(value = "is_admin")
+    private Boolean isAdmin;
+    /**
+     * 用户是否被冻结
+     */
+    @TableField(value = "is_frozen")
+    private Boolean isFrozen;
 }

@@ -28,4 +28,6 @@ public interface FileService extends IService<File> {
     boolean restoreFromRecycleBin(String fileId);
 
     List<File> getRecycleBinFileList(Integer uid);
+
+    List<File> getAllFilesByUid1(Integer uid);
 }

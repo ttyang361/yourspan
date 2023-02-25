@@ -11,4 +11,6 @@ public interface RatingsService extends IService<Ratings> {
     List<Ratings> getRatingsByUid(Integer uid);
 
     void deleteRatingsByFid(String fileId);
+
+    void deleteRatingsByUid(Integer uid);
 }

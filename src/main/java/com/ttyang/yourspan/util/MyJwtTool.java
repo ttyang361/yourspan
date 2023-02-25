@@ -4,6 +4,8 @@ import cn.hutool.core.date.DateField;
 import cn.hutool.core.date.DateUtil;
 import cn.hutool.jwt.JWT;
 import cn.hutool.jwt.JWTValidator;
+import com.ttyang.yourspan.service.UserService;
+import org.springframework.beans.factory.annotation.Autowired;
 
 /**
  * @author ttyang
@@ -45,5 +47,4 @@ public class MyJwtTool {
         }
         return false;
     }
-
 }

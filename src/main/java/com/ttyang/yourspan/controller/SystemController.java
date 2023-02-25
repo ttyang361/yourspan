@@ -80,7 +80,11 @@ public class SystemController {
             } else {
                 throw new RuntimeException("用户名或密码错误！");
             }
-            return Result.ok(map).message("登录成功！");
+            if (user.getIsFrozen()) {
+                throw new RuntimeException("该账号已被冻结！请联系管理员！");
+            } else {
+                return Result.ok(map).message("登录成功！");
+            }
         } catch (RuntimeException e) {
             e.printStackTrace();
             return Result.fail().message(e.getMessage());
@@ -205,6 +209,12 @@ public class SystemController {
         // 从数据库获取所有目录表数据并以List<Menu>形式返回
         List<Menu> l1 = menuService.getAllMenus();
         List<Menu> l2 = new ArrayList<>();
+        // 查看该用户是否是管理员
+        boolean isAdmin = userService.getUserByUid(MyJwtTool.getUidFromToken(token)).getIsAdmin();
+        // 如果不是管理员，则将requireAuth为true的项移除
+        if (!isAdmin) {
+            l1.removeIf(Menu::getRequireAuth);
+        }
         // 遍历目录List<Menu> l1，去除id为1的项，并将所有parentId为1的放入另一个List<Menu> l2中
         for (Menu menu : l1) {
             if (menu.getId() != 1) {

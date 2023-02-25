@@ -98,4 +98,11 @@ public class FileServiceImpl extends ServiceImpl<FileMapper, File> implements Fi
         queryWrapper.eq("f_delete", true);
         return baseMapper.selectList(queryWrapper);
     }
+
+    @Override
+    public List<File> getAllFilesByUid1(Integer uid) {
+        QueryWrapper<File> queryWrapper = new QueryWrapper<>();
+        queryWrapper.eq("f_owner_id", uid);
+        return baseMapper.selectList(queryWrapper);
+    }
 }

@@ -29,7 +29,8 @@ public enum ResultEnum {
     TIME_OUT(206, "会话已过期，请重新登陆"),
     EMAIL_NOT_VALID(207, "该邮箱未注册"),
     EMAIL_ERROR(207, "该邮箱已被注册"),
-    FILE_NOT_EXIST(208, "文件不存在");
+    FILE_NOT_EXIST(208, "文件不存在"),
+    NOT_ADMIN(403, "非管理员");
     private final Integer code;
     private final String message;
 }

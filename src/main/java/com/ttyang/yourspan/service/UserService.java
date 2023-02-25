@@ -6,6 +6,8 @@ import com.ttyang.yourspan.pojo.LoginForm;
 import com.ttyang.yourspan.pojo.RegisterForm;
 import com.ttyang.yourspan.pojo.User;
 
+import java.util.List;
+
 /**
  * @author ttyang
  * @version 1.0
@@ -55,4 +57,14 @@ public interface UserService extends IService<User> {
      */
 
     User forget(ForgetForm forgetForm);
+
+    List<User> getAllUserInfo();
+
+    void freezeUser(Integer uid);
+
+    void unfreezeUser(Integer valueOf);
+
+    void deleteUser(Integer valueOf);
+
+    void setAsAdmin(Integer valueOf);
 }

@@ -39,4 +39,9 @@ public class FolderServiceImpl extends ServiceImpl<FolderMapper, Folder> impleme
     public Folder getFolderByUidAndParentFolderId(Integer uid, int parentFolderId) {
         return baseMapper.selectOne(new QueryWrapper<Folder>().eq("fl_owner_id", uid).eq("fl_parent_id", parentFolderId));
     }
+
+    @Override
+    public void deleteFolderByFlid(Integer flid) {
+        baseMapper.delete(new QueryWrapper<Folder>().eq("fl_id", flid));
+    }
 }

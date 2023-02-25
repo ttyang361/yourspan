@@ -14,4 +14,6 @@ public interface FolderService extends IService<Folder> {
     boolean modifyFolderName(String currentFolderId, String newFolderName);
 
     Folder getFolderByUidAndParentFolderId(Integer uid, int parentFolderId);
+
+    void deleteFolderByFlid(Integer flid);
 }
